@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create an IAM user in the management account and allow assuming roles in all child accounts within specified OUs.
+
+Parameters:
+  ManagementAccountId:
+    Type: String
+    Description: The AWS Account ID of the management account in the organization.
+  
+  OrganizationalUnitIds:
+    Type: CommaDelimitedList
+    Description: List of Organizational Unit IDs where the IAM roles should be created.
+
+Resources:
+  # Create IAM User in the Management Account
+  # OrgRoleAssumerUser:
+  #  Type: "AWS::IAM::User"
+  #  Properties:
+  #    UserName: "OrgRoleAssumer"
+
+  # Attach Policy for assuming roles across accounts
+  OrgRoleAssumerPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "AllowAssumeRolesInChildAccounts"
+      Roles: 
+        - !Ref OrgRoleAssumerUser
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "sts:AssumeRole"
+            Resource: !Sub "arn:aws:iam::*:role/OrgAccountSecurityRole"
+
+  # Create IAM Role in each account within the specified OUs
+  OrgAccountSecurityRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "OrgAccountSecurityRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              AWS: !Sub "arn:aws:iam::${ManagementAccountId}:user/OrgRoleAssumer"
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - "arn:aws:iam::aws:policy/SecurityAudit"
+
+Outputs:
+  UserName:
+    Description: Name of the created IAM user.
+    Value: !Ref OrgRoleAssumerUser
+  UserArn:
+    Description: ARN of the created IAM user.
+    Value: !GetAtt OrgRoleAssumerUser.Arn
+  RoleName:
+    Description: Name of the created IAM role.
+    Value: !Ref OrgAccountSecurityRole
+  RoleArn:
+    Description: ARN of the created IAM role.
+    Value: !GetAtt OrgAccountSecurityRole.Arn
